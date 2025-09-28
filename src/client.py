@@ -1,4 +1,5 @@
-"""Cliente do Chat Distribuído RH <-> TI.
+"""
+Cliente do Chat Distribuído RH <-> TI.
 
 O cliente interpreta sinais do servidor: ROLE, TURN, MSG, INFO, SHUTDOWN.
 Quando recebe TURN, solicita input e envia MSG|<texto> ou QUIT.
@@ -19,28 +20,41 @@ class ChatClient:
 
     def __init__(self, host: str = HOST, port: int = PORT) -> None:
         """
+        Inicializa o cliente com a configuração de conexão.
+
         Args:
-            host: Endereço do servidor.
-            port: Porta do servidor.
+            host (str): Endereço do servidor.
+            port (int): Porta do servidor.
         """
         self.host = host
         self.port = port
-        self.sock: Optional[socket.socket] = None
-        self.role: Optional[str] = None
-        self.running = threading.Event()
-        self.turn_event = threading.Event()
-        self.receiver_thread: Optional[threading.Thread] = None
+        self.sock: Optional[socket.socket] = None                   #Socket da conexão TCp
+        self.role: Optional[str] = None                             #Papel do cliente (RH / TI)
+        self.running = threading.Event()                            #Controla se o cliente está ativo
+        self.turn_event = threading.Event()                         #Sinaliza quando é o turno de enviar a mensagem
+        self.receiver_thread: Optional[threading.Thread] = None     #Thread para receber as mensagens.
 
     def connect(self) -> None:
-        """Conecta ao servidor e inicia a thread receptora."""
+        """
+        Estabelece conexão com o servidor e inicia a thread receptora.
+        
+        Raises:
+            ConnectionError: Se não for possível conectar ao servidor.
+            socket.gaierror: Se o hostname não puder ser resolvido.
+            TimeoutError: Se a conexão exceder o timeout.
+        """
+
+        #Cria o socket TCP e conecta
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.sock.connect((self.host, self.port))
         self.running.set()
+        #Thread separada para não bloquear a interação do usuário
         self.receiver_thread = threading.Thread(target=self._receiver_loop, daemon=True)
         self.receiver_thread.start()
 
     def _receiver_loop(self) -> None:
-        """Recebe linhas do servidor e os interpreta.
+        """
+        Loop receptor que processa mensagens do servidor.
 
         Sinais importantes:
             ROLE|<DEPT>|<START> -> define role e, se START == 1, seta turno.
@@ -48,6 +62,9 @@ class ChatClient:
             MSG|seq|FROM|TEXT -> imprime mensagem recebida (somente destinatário).
             INFO|... -> imprime informação.
             SHUTDOWN -> encerra o cliente.
+
+        Raises:
+            Exception: Erros na recepção de mensagens.
         """
         assert self.sock is not None
         f = self.sock.makefile("r", encoding=ENC, newline="\n")
@@ -56,24 +73,25 @@ class ChatClient:
                 line = raw.rstrip("\n")
                 if not line:
                     continue
-                if line.startswith("ROLE|"):
+                #Interpreta sinais do servidor
+                if line.startswith("ROLE|"):                #Define papel do cliente
                     _, role, start_flag = line.split("|")
                     self.role = role
                     if start_flag == "1":
                         self.turn_event.set()
-                elif line == "TURN":
+                elif line == "TURN":                        #Libera o turno para enviar a mensagem
                     self.turn_event.set()
-                elif line.startswith("MSG|"):
+                elif line.startswith("MSG|"):               #Mensagem do outro cliente
                     _, seq, frm, text = line.split("|", 3)
                     print(f"[{frm} -> {self.role}] #{seq} {text}")
-                elif line.startswith("INFO|"):
+                elif line.startswith("INFO|"):              #Mensagem informativa
                     _, text = line.split("|", 1)
                     print(f"[INFO] {text}")
-                elif line == "SHUTDOWN":
+                elif line == "SHUTDOWN":                    #Sevidor mandou encerrar
                     print(">> [CLIENT] Servidor solicitou shutdown. Encerrando cliente.")
                     # sinaliza término e acorda qualquer wait no input
                     self.running.clear()
-                    self.turn_event.set()
+                    self.turn_event.set()                   
                     break
                 else:
                     print(f"[CLIENT] Mensagem do servidor: {line}")
@@ -90,14 +108,20 @@ class ChatClient:
                 pass
 
     def run_interactive(self) -> NoReturn:
-        """Laço principal de envio: espera TURN e solicita input do usuário.
+        """
+        Laço principal para interação com o usuário.
 
-        O cliente não imprime sua própria mensagem localmente (requisito).
+        Espera turno, solicita input e envia a mensagem para o servidor.
+        Não imprime a mensagem localmente (requisito).
+        
+        Raises:
+            EOFError: casa ocorra algum erro a mensagem será "sair".
+            Exception: erro ao fechar socket.
         """
         assert self.sock is not None
         try:
             while self.running.is_set():
-                # espera pelo turno (com timeout curto para checar running)
+                #Espera pelo turno (com timeout curto para checar se ainda está rodando)
                 self.turn_event.wait(timeout=0.5)
                 if not self.running.is_set():
                     break
@@ -106,7 +130,7 @@ class ChatClient:
                     continue
                 # agora é o turno - solicita input (bloqueante)
                 try:
-                    time.sleep(0.5)
+                    time.sleep(0.5)         #Evita conflito dos prints
                     msg = input(f"\n[{self.role}] Digite sua mensagem (ou 'sair'): ").strip()
                 except EOFError:
                     msg = "sair"
@@ -122,6 +146,7 @@ class ChatClient:
                 self.turn_event.clear()
             print(f">> [CLIENT] {self.role} encerrando localmente.")
         finally:
+            #Encerra recursos
             self.running.clear()
             try:
                 if self.sock:
@@ -130,10 +155,14 @@ class ChatClient:
                 pass
 
     def _send_raw(self, text: str) -> None:
-        """Envia texto ao servidor com tratamento de erro.
+        """
+        Envia texto ao servidor com tratamento de erro.
 
         Args:
-            text: Texto a ser enviado (inclui '\n' quando aplicável).
+            text (str): Texto a ser enviado (inclui '\n' quando aplicável).
+
+        Raises:
+            Exception: Caso tenha falha no envio do socket.
         """
         try:
             if self.sock:
@@ -143,7 +172,7 @@ class ChatClient:
             self.running.clear()
 
     def close(self) -> None:
-        """Força fechamento do cliente."""
+        """Força fechamento do cliente e limpa recursos."""
         self.running.clear()
         if self.sock:
             try:
@@ -153,11 +182,12 @@ class ChatClient:
 
 
 def cliente(departamento: str, iniciar: bool) -> None:
-    """Entrada compatível com run_all.py para iniciar cliente.
+    """
+    Função compatível com run_all.py para iniciar cliente.
 
     Args:
-        departamento: Nome do departamento (apenas informativo).
-        iniciar: Parâmetro compatível com versão anterior; servidor decide quem começa.
+        departamento (str): Nome do departamento (apenas informativo).
+        iniciar (bool): Parâmetro compatível com versão anterior; servidor decide quem começa.
     """
     client = ChatClient()
     client.connect()
