@@ -156,7 +156,7 @@ class ChatClient:
 
     def _send_raw(self, text: str) -> None:
         """
-        Envia texto ao servidor com tratamento de erro.
+        Envia texto bruto para o servidor.
 
         Args:
             text (str): Texto a ser enviado (inclui '\n' quando aplicável).
