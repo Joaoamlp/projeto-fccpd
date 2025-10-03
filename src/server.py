@@ -17,9 +17,11 @@ Protocolo simples (linhas UTF-8 terminadas em '\n'):
 """
 
 # Importando bibliotecas
+import datetime
 import socket
 import threading
 from typing import Dict, List, Tuple, Optional
+from pathlib import Path
 
 # Variáveis de Ambiente
 HOST = "127.0.0.1"
@@ -281,6 +283,26 @@ class ChatServer:
         print("\n>> [SERVIDOR] CHAT FINALIZADO! Conversa completa (ordenada):")
         for seq, frm, txt in sorted(self.history, key=lambda x: x[0]):
             print(f"#{seq:03d} [{frm}] {txt}")
+
+        try:
+           # 1. Gerar um nome de arquivo com data e hora
+           timestamp = datetime.datetime.now().strftime("%d-%m-%y_%H-%M-%S")
+           nome_arquivo = Path(f"history/log_chat_{timestamp}.txt")
+           nome_arquivo.parent.mkdir(parents=True, exist_ok=True)
+      
+           # 2. Abrir o arquivo para escrita e salvar a conversa
+           with open(nome_arquivo, "w", encoding="utf-8") as f:
+               f.write(f"Histórico da conversa - {timestamp}\n")
+               f.write("="*40 + "\n")
+               for seq, frm, txt in sorted(self.history, key=lambda x: x[0]):
+                   f.write(f"#{seq:03d} [{frm}] {txt}\n")
+          
+           print(f"\n>> [SERVIDOR] Histórico da conversa salvo em '{nome_arquivo}'.")
+
+
+        except IOError as e:
+           print(f">> [SERVIDOR] Erro ao salvar o histórico no arquivo: {e}")
+
         #Informa que vai encerrar clientes e sockets
         print("\n>> [SERVIDOR] Enviando SHUTDOWN para clientes restantes e fechando sockets.")
         with self.clients_lock:
