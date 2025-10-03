@@ -62,7 +62,7 @@ O sistema contém três componentes principais:
 
 ## 🚀 Como Executar
 
-Clone o repositório e rode o script de orquestração na pasta raiz do codigo, no caso o "src":
+Clone o repositório e rode o script de orquestração na pasta src:
 
 ```bash
 python run_all.py
@@ -125,4 +125,5 @@ Escolha: 1
 - Gabriel Tabosa
 
 ## 📍 CESAR — Projeto Acadêmico
+
 
