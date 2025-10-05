@@ -65,7 +65,8 @@ O sistema contém três componentes principais:
 Clone o repositório e rode o script de orquestração na pasta src:
 
 ```bash
-python run_all.py
+cd src
+python run_all.py ou python3 run_all.py
 O programa pedirá para escolher qual departamento inicia a conversa.
 
 🖥️ Exemplo de Uso
@@ -125,5 +126,6 @@ Escolha: 1
 - Gabriel Tabosa
 
 ## 📍 CESAR — Projeto Acadêmico
+
 
 
